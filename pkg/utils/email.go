@@ -11,7 +11,7 @@ import (
 	"strconv"
 
 	"github.com/k3a/html2text"
-	"github.com/seal/ds/pkg/models"
+	"github.com/seal/templateapi/pkg/models"
 
 	"gopkg.in/gomail.v2"
 )
@@ -21,6 +21,8 @@ type EmailData struct {
 	FirstName string
 	Subject   string
 }
+
+// ? Email template parser
 
 func ParseTemplateDir(dir string) (*template.Template, error) {
 	var paths []string
@@ -41,6 +43,7 @@ func ParseTemplateDir(dir string) (*template.Template, error) {
 	return template.ParseFiles(paths...)
 }
 
+// Verification email
 func SendEmail(user *models.User, data *EmailData) {
 
 	// Sender data.
@@ -59,7 +62,7 @@ func SendEmail(user *models.User, data *EmailData) {
 	template, err := ParseTemplateDir("pkg/templates/")
 	if err != nil {
 		Error(errors.New("Could not parse template" + err.Error()))
-		// return  SHOULD RETURN HERE
+		return
 	}
 
 	template.ExecuteTemplate(&body, "verificationCode.html", &data)

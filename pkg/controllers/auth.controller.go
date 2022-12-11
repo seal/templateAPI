@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seal/ds/pkg/models"
-	"github.com/seal/ds/pkg/utils"
+	"github.com/seal/templateapi/pkg/models"
+	"github.com/seal/templateapi/pkg/utils"
 	"github.com/thanhpk/randstr"
 
 	"gorm.io/gorm"
@@ -24,19 +24,83 @@ func NewAuthController(DB *gorm.DB) AuthController {
 	return AuthController{DB}
 }
 
+func (uc *UserController) PutUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser := ctx.Value("currentUser").(models.User)
+
+	var payload *models.UserPut
+	err := json.NewDecoder(r.Body).Decode(&payload)
+	if err != nil {
+		utils.Error(err)
+		utils.HttpError(err, 400, w)
+		return
+	}
+	Passcode := currentUser.Password
+	if len(payload.OldPasscode) > 2 && len(payload.NewPasscode) > 2 {
+
+		OldPasscode, err := utils.HashPassword(payload.OldPasscode)
+		if err != nil {
+			utils.Error(err)
+			utils.HttpError(err, 500, w)
+			return
+		}
+
+		NewPasscode, err := utils.HashPassword(payload.NewPasscode)
+		if err != nil {
+			utils.Error(err)
+			utils.HttpError(err, 500, w)
+			return
+		}
+		if OldPasscode != currentUser.Password {
+			err := errors.New("Old password is invalid")
+			utils.Error(err)
+			utils.HttpError(err, 404, w)
+			return
+		}
+		Passcode = NewPasscode
+	}
+
+	updatedUser := models.User{
+		FirstName: payload.FirstName,
+		LastName:  payload.LastName,
+		Username:  payload.Username,
+		Email:     strings.ToLower(payload.Email),
+		Password:  Passcode,
+	}
+	if uc.DB.Model(&updatedUser).Where("id=?", currentUser.ID).Updates(&updatedUser).RowsAffected == 0 {
+		uc.DB.Create(&updatedUser)
+	}
+	response, err := json.Marshal(updatedUser)
+	if err != nil {
+		err = fmt.Errorf("%w : Error marshalling response for new wardrobe, wardrobe was created successfully", err)
+		utils.Error(err)
+		utils.HttpError(err, 500, w)
+		return
+	}
+	fmt.Fprintf(w, string(response))
+}
+func (uc *UserController) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser := ctx.Value("currentUser").(models.User)
+	User := models.User{
+		ID: currentUser.ID,
+	}
+	uc.DB.Where("user_id=?", currentUser.ID).Delete(&User)
+	fmt.Fprint(w, `{
+    "success":true,
+    "message":"Success"
+    }`)
+
+	w.Header().Set("Content-Type", "application/json")
+}
+
 // [...] SignUp User
 func (ac *AuthController) SignUpUser(w http.ResponseWriter, r *http.Request) {
 	var payload *models.SignUpInput
 	err := json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
 		utils.Error(err)
-		utils.HttpError(err, 500, w)
-		return
-	}
-	if payload.Password != payload.PasswordConfirm {
-		err = errors.New("Mismatched password")
-		utils.Error(err)
-		utils.HttpError(err, 401, w)
+		utils.HttpError(err, 400, w)
 		return
 	}
 
@@ -48,12 +112,13 @@ func (ac *AuthController) SignUpUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newUser := models.User{
-		Name:     payload.Name,
-		Username: payload.Username,
-		Email:    strings.ToLower(payload.Email),
-		Password: hashedPassword,
-		Plan:     "free",
-		Verified: false,
+		FirstName: payload.FirstName,
+		LastName:  payload.LastName,
+		Username:  payload.Username,
+		Email:     strings.ToLower(payload.Email),
+		Password:  hashedPassword,
+		Plan:      "free",
+		Verified:  false,
 	}
 
 	result := ac.DB.Create(&newUser)
@@ -78,16 +143,10 @@ func (ac *AuthController) SignUpUser(w http.ResponseWriter, r *http.Request) {
 	newUser.VerificationCode = verification_code
 	ac.DB.Save(newUser)
 
-	var firstName = newUser.Name
-
-	if strings.Contains(firstName, " ") {
-		firstName = strings.Split(firstName, " ")[1]
-	}
-
 	// ? Send Email
 	emailData := utils.EmailData{
-		URL:       utils.EnvVariable("ClientOrigin") + "/verifyemail/" + code,
-		FirstName: firstName,
+		URL:       utils.EnvVariable("ClientOrigin") + "/verify?verificationCode=" + code,
+		FirstName: newUser.FirstName,
 		Subject:   "Your account verification code",
 	}
 
@@ -99,6 +158,7 @@ func (ac *AuthController) SignUpUser(w http.ResponseWriter, r *http.Request) {
     "message":"`+message+`"
     }`)
 	w.Header().Set("Content-type", "application/json")
+	w.WriteHeader(201)
 }
 
 // [...] Verify Email
@@ -112,7 +172,7 @@ func (ac *AuthController) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	if result.Error != nil {
 		err := errors.New("Invalid verification code or user doesn't exist")
 		utils.Error(err)
-		utils.HttpError(err, 401, w)
+		utils.HttpError(err, 400, w)
 		return
 	}
 
@@ -141,7 +201,7 @@ func (ac *AuthController) SignInUser(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
 		utils.Error(err)
-		utils.HttpError(err, 501, w)
+		utils.HttpError(err, 400, w)
 		return
 	}
 
@@ -192,7 +252,23 @@ func (ac *AuthController) SignInUser(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, cookie)
 	w.Header().Set("Content-type", "application/json")
-	fmt.Fprint(w, `"success":true, "token": "`+token+`"`)
+	var UserResponse models.UserResponseToken
+	UserResponse.User.ID = user.ID
+	UserResponse.User.FirstName = user.FirstName
+	UserResponse.User.LastName = user.LastName
+	UserResponse.User.Username = user.Username
+	UserResponse.User.Email = user.Email
+	UserResponse.User.Plan = user.Plan
+	UserResponse.Token = token
+	response, err := json.Marshal(&UserResponse)
+	if err != nil {
+		utils.Error(err)
+		utils.HttpError(err, 500, w)
+		return
+	}
+
+	fmt.Fprint(w, string(response))
+
 }
 
 // [...] SignOut User

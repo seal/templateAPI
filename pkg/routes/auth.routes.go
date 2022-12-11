@@ -2,8 +2,8 @@ package routes
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/seal/ds/pkg/controllers"
-	"github.com/seal/ds/pkg/middleware"
+	"github.com/seal/templateapi/pkg/controllers"
+	"github.com/seal/templateapi/pkg/middleware"
 )
 
 type AuthRouteController struct {
@@ -17,7 +17,7 @@ func NewAuthRouteController(authController controllers.AuthController) AuthRoute
 func (rc *AuthRouteController) AuthRouter(router chi.Router) {
 	router.Post("/register", rc.authController.SignUpUser)
 	router.Post("/login", rc.authController.SignInUser)
-	router.Get("/verifyemail/:verificationCode", rc.authController.VerifyEmail)
+	router.Get("/verifyemail", rc.authController.VerifyEmail)
 	//r.Get("/logout", rc.authController.LogoutUser.ServeHTTP)
 
 	logoutGroup := router.Group(nil)

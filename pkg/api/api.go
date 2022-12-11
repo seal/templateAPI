@@ -1,19 +1,23 @@
 package api
 
 import (
+	"fmt"
+	"log"
+	//"path/filepath"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/seal/ds/pkg/database"
-	"github.com/seal/ds/pkg/routes"
+	"github.com/seal/templateapi/pkg/database"
+	"github.com/seal/templateapi/pkg/routes"
 
-	"github.com/seal/ds/pkg/controllers"
-
+	"io/fs"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/seal/templateapi/pkg/controllers"
+	"github.com/seal/templateapi/ui"
 )
 
 var (
@@ -36,24 +40,74 @@ func GetRouter() *chi.Mux {
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
+		// AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
+		AllowedOrigins: []string{"https://*", "http://*"},
+		// AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: false,
+		AllowCredentials: true,
+		Debug:            true,
 		MaxAge:           300, // Maximum value not ignored by any of major browsers
 	}))
-	r.Route("/user", func(r chi.Router) {
+	r.Route("/api", func(r chi.Router) {
 
-		UserRouteController.UserRoute(r)
-		AuthRouteController.AuthRouter(r)
+		r.Mount("/admin", AdminRouter())
 	})
-	r.Mount("/api/admin", AdminRouter())
-	workDir, _ := os.Getwd()
-	filesDir := http.Dir(filepath.Join(workDir, "js/dist"))
-	FileServer(r, "/", filesDir)
+	r.HandleFunc("/*", indexHandler)
+	// static files
+	staticFS, err := fs.Sub(ui.StaticFiles, "dist")
+	if err != nil {
+		log.Println(err, "err here")
+	}
+	httpFS := http.FileServer(http.FS(staticFS))
+	r.Handle("/assets/*", httpFS)
+	// Below is a previous version
+	/*r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+		rawFile, err := ui.StaticFiles.ReadFile("dist/index.html")
+		if err != nil {
+			log.Println("err in dist/index", err)
+		}
+		log.Println("IndexHandler used")
+		w.Write(rawFile)
+	})*/
+	/*
+		workDir, _ := os.Getwd()
+		filesDir := http.Dir(filepath.Join(workDir, "static"))
+		FileServer(r, "/", filesDir)
+	*/
 	return r
 }
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		fmt.Fprintln(w, http.StatusText(http.StatusMethodNotAllowed))
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/api") {
+		http.NotFound(w, r)
+		return
+	}
+
+	if r.URL.Path == "/favicon.ico" {
+		rawFile, err := ui.StaticFiles.ReadFile("dist/favicon.ico")
+		if err != nil {
+			log.Println(err, "error favicon")
+		}
+		w.Write(rawFile)
+		return
+	}
+
+	rawFile, err := ui.StaticFiles.ReadFile("dist/index.html")
+	if err != nil {
+		log.Println("err in dist/index", err)
+	}
+	w.Write(rawFile)
+}
+
+/*
 func FileServer(r chi.Router, path string, root http.FileSystem) {
 	if strings.ContainsAny(path, "{}*") {
 		panic("FileServer does not permit any URL parameters.")
@@ -71,13 +125,17 @@ func FileServer(r chi.Router, path string, root http.FileSystem) {
 		fs := http.StripPrefix(pathPrefix, http.FileServer(root))
 		fs.ServeHTTP(w, r)
 	})
-}
+}*/
 
 func AdminRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Use(AdminOnly)
 	r.Get("/", AdminAccounts)
 	r.Get("/accounts", AdminAccounts)
+	/*
+		Methods to add:
+		/dashboard -> returns tbd, probably total users, total daily searches, etc
+	*/
 	return r
 }
 

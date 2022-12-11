@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/seal/ds/pkg/database"
-	"github.com/seal/ds/pkg/models"
-	"github.com/seal/ds/pkg/utils"
+	"github.com/seal/templateapi/pkg/database"
+	"github.com/seal/templateapi/pkg/models"
+	"github.com/seal/templateapi/pkg/utils"
 )
 
 func DeserializeUser(next http.Handler) http.Handler {
@@ -27,13 +27,17 @@ func DeserializeUser(next http.Handler) http.Handler {
 		}
 
 		if token == "" {
-			utils.Error(errors.New("You are not logged in"))
+			err := errors.New("You are not logged in ")
+
+			utils.Error(err)
+			utils.HttpError(err, 401, w)
 			return
 		}
 
 		TokenSecret := utils.EnvVariable("TokenSecret")
 		sub, err := utils.ValidateToken(token, TokenSecret)
 		if err != nil {
+			utils.HttpError(err, 401, w)
 			utils.Error(err)
 			return
 		}
@@ -41,7 +45,9 @@ func DeserializeUser(next http.Handler) http.Handler {
 		var user models.User
 		result := database.Instance.First(&user, "id = ?", fmt.Sprint(sub))
 		if result.Error != nil {
-			utils.Error(errors.New("THe user beloning to this token no longer exists"))
+			err := errors.New("The user belonging to this token no longer exists")
+			utils.Error(err)
+			utils.HttpError(err, 401, w)
 			return
 		}
 

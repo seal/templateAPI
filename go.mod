@@ -1,4 +1,4 @@
-module github.com/seal/ds
+module github.com/seal/templateapi
 
 go 1.19
 

@@ -3,7 +3,7 @@ package database
 import (
 	"log"
 
-	"github.com/seal/ds/pkg/models"
+	"github.com/seal/templateapi/pkg/models"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -21,6 +21,5 @@ func Connect(connectionString string) {
 }
 func Migrate() {
 	Instance.AutoMigrate(&models.User{})
-	//Instance.AutoMigrate(&models.Wardrobe{})
 	log.Println("Database Migration Completed!")
 }

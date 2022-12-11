@@ -2,13 +2,40 @@ package utils
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
+	"github.com/seal/templateapi/pkg/types"
 )
 
+func ReadUserIP(r *http.Request) string {
+	IPAddress := r.Header.Get("X-Real-Ip")
+	if IPAddress == "" {
+		IPAddress = r.Header.Get("X-Forwarded-For")
+	}
+	if IPAddress == "" {
+		IPAddress = r.RemoteAddr
+	}
+	return IPAddress
+}
+func CountryLoopup(r *http.Request) string {
+	ip := strings.Split(ReadUserIP(r), ":")
+	resp, err := http.Get("https://api.iplocation.net?ip=" + ip[0])
+	if err != nil {
+		Error(err)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		Error(err)
+	}
+	var IPResponse types.IpLoopup
+	json.Unmarshal(body, &IPResponse)
+	return IPResponse.CountryCode2
+}
 func EnvVariable(key string) string {
 	err := godotenv.Load(".env")
 	if err != nil {

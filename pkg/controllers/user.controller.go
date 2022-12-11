@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/seal/ds/pkg/models"
-	"github.com/seal/ds/pkg/utils"
+	"github.com/seal/templateapi/pkg/models"
+	"github.com/seal/templateapi/pkg/utils"
 	"gorm.io/gorm"
 )
 
@@ -22,11 +22,12 @@ func (uc *UserController) GetMe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := ctx.Value("currentUser").(models.User)
 	userResponse := &models.UserResponse{
-		ID:       currentUser.ID,
-		Name:     currentUser.Name,
-		Email:    currentUser.Email,
-		Plan:     currentUser.Plan,
-		Username: currentUser.Username,
+		ID:        currentUser.ID,
+		FirstName: currentUser.FirstName,
+		LastName:  currentUser.LastName,
+		Email:     currentUser.Email,
+		Plan:      currentUser.Plan,
+		Username:  currentUser.Username,
 	}
 	response, err := json.Marshal(userResponse)
 	if err != nil {
