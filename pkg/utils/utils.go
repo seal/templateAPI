@@ -37,9 +37,15 @@ func CountryLoopup(r *http.Request) string {
 	return IPResponse.CountryCode2
 }
 func EnvVariable(key string) string {
+	/*
+		err := godotenv.Load(".env")
+		if err != nil {
+			log.Fatalf("Error loading .env file")
+		} */
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatalf("Error loading .env file")
+		log.Fatal(err)
+
 	}
 	return os.Getenv(key)
 }
